@@ -1,7 +1,10 @@
-const mongoose = require('mongose');
+const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 
-dotenv.config = async () => {
+// Carregar variáveis de ambiente do arquivo .env
+dotenv.config();
+
+const connectDB = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URL, {
             useNewUrlParser: true,

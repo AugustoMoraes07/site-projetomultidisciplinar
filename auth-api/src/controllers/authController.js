@@ -1,35 +1,72 @@
+const Joi = require('joi'); // Importando Joi
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-exports.registerUser = async (req, res) => {
-    const { username, email, password} = req.body;
+// Esquema de validação com Joi
+const signUpValidationSchema = Joi.object({
+  username: Joi.string().min(3).required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(6).required(),
+});
 
-    try {
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+// Função de Signup
+const signUp = async (req, res) => {
+  // Validar os dados de entrada
+  const { error } = signUpValidationSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
 
-        const newUser = new User({ username, email, password:hashedPassword });
-        await newUser.save();
+  try {
+    const { username, email, password } = req.body;
 
-        res.status(201).json({ message: 'Usuário cadastrato com sucesso!'});
-    } catch (error) {
-        res.status(500).json({message: 'Erro ao cadastrar usuário', error });
+    // Verificar se o usuário já existe
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ message: 'Usuário já existe' });
     }
+
+    const newUser = new User({ username, email, password });
+    await newUser.save();
+
+    res.status(201).json({ message: 'Usuário criado com sucesso' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erro no servidor' });
+  }
 };
 
-exports.loginUser = async (req, res) => {
-    const {email, password} = req.body;
+// Função de Login
+const login = async (req, res) => {
+  // Validar os dados de entrada
+  const loginValidationSchema = Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().min(6).required(),
+  });
 
-    try {
-        const user = await User.findOne({email });
-        if (!user) return res.status(404).json({message: 'Usuário não encontrado' });
+  const { error } = loginValidationSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res. status(400).json({ message: 'senha incorreta'});
+  try {
+    const { email, password } = req.body;
 
-        res.json({ message: 'Login bem-sucedido!', token });
-    } catch (error) {
-        res.status(500).json({ message: 'Erro no login', error});
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Usuário não encontrado' });
     }
+
+    const isMatch = await user.comparePassword(password); // A função comparePassword deve ser implementada no modelo User
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Senha incorreta' });
+    }
+
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    res.status(200).json({ message: 'Login bem-sucedido', token });
+  } catch (error) {
+    res.status(500).json({ message: 'Erro no servidor' });
+  }
 };
+
+module.exports = { signUp, login };
